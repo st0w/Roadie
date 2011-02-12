@@ -1,23 +1,17 @@
 #!/usr/bin/env python -u
-# ---*< clean_itunes_library.py >*---------------------------------------------
-# Deletes files from iTunes library on a specific playlist
+# ---*< sync_directory_hierarchy_with_itunes.py >*-----------------------------
+# Adds files 
 #
 # Copyright (C) 2011 st0w <st0w@st0w.com>
 #
 # This is released under the MIT License.
-"""Removes all files from disk and iTunes library on a specific playlist
+"""Adds all files to iTunes that aren't already in library.
 
 Created on Feb 12, 2011
 
-Prompts for verification before actually deleting all files
-
-At first, I was going to iterate over the whole library and just grab
-all the tracks with one star.  But that's slow on large libraries, so I
-decided to keep that logic in iTunes by creating a smart playlist named
-'Files to kill' that contains only files with one star.  Then I just
-grab all the tracks in that playlist.  Keeps the script faster, although
-it still needs to grab the entire library once to get access to the root
-track object.
+Note that this only looks at the actual filename/path.  It doesn't check
+for duplicate status or anything like that.  Just finds files below a
+given directory and adds them to iTunes.
 
 """
 # ---*< Standard imports >*----------------------------------------------------
@@ -26,16 +20,27 @@ import sys
 # ---*< Third-party imports >*-------------------------------------------------
 
 # ---*< Local imports >*-------------------------------------------------------
-from itunes import ITunesManager, delete_tracks
+from itunes import ITunesManager
 
 # ---*< Initialization >*------------------------------------------------------
-"""The name of the playlist of files to kill.  Any type of playlist."""
-PLAYLIST_NAME = 'Files to kill'
+DEFAULT_DIR = '/srv/multimedia/Music'
 
 # ---*< Code >*----------------------------------------------------------------
-if __name__ == "__main__":
-    itunes = ITunesManager()#IGNORE:C0103
 
+def sync_dir(dirname, recursive=True):
+    """Synchronizes a directory hierarchy with iTunes
+    
+    :param dirname: `string` of the root directory
+    :param recursive: `bool` whether or not to recursively sync
+    """
+    itunes = ITunesManager()#IGNORE:C0103
     t = itunes.itunes.tracks()[0]
     print t.size()
-    sys.exit(0)
+
+    print dirname
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        sync_dir(sys.argv[1])
+    else:
+        sync_dir(DEFAULT_DIR)
