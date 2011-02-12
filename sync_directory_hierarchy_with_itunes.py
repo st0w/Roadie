@@ -36,9 +36,6 @@ PLAYLIST_NAME = 'Files to kill'
 if __name__ == "__main__":
     itunes = ITunesManager()#IGNORE:C0103
 
-    target_playlist = (sys.argv[1] if len(sys.argv) > 1#IGNORE:C0103
-                       else PLAYLIST_NAME)
-
-    dyingtracks = itunes.get_tracks_from_playlist(target_playlist)#IGNORE:C0103
-    if len(dyingtracks) > 0:
-        delete_tracks(dyingtracks)
+    t = itunes.itunes.tracks()[0]
+    print t.size()
+    sys.exit(0)
