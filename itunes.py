@@ -1,38 +1,12 @@
-#!/usr/bin/env python -u
-# ---*< clean_itunes_library.py >*---------------------------------------------
+# ---*< itunes.py >*-----------------------------------------------------------
 # Deletes files from iTunes library and disk with one star
 #
 # Copyright (C) 2011 st0w <st0w@st0w.com>
 #
 # This is released under the MIT License.
-"""Removes all files from disk and iTunes library with one-star rating
+"""Provides limited access to iTunes via py-appscript
 
 Created on Feb 12, 2011
-
-Prompts for verification before actually deleting all files
-
-At first, I was going to iterate over the whole library and just grab
-all the tracks with one star.  But that's slow on large libraries, so I
-decided to keep that logic in iTunes by creating a smart playlist named
-'Files to kill' that contains only files with one star.  Then I just
-grab all the tracks in that playlist.  Keeps the script faster, although
-it still needs to grab the entire library once to get access to the root
-track object.
-
---> BE CAREFUL WITH THIS!!!! <--
-
-Note that I don't prompt for verification before each file.  I make no
-warranty or guarantee that this won't completely destroy your entire
-library.  USE AT YOUR OWN RISK!
-
-Overall steps
-    * Connect to iTunes
-    * Get list of all files with one star
-    * Present list of files, get verification (allow toggling by number/
-      range)
-    * Display amount of disk space to be reclaimed
-    * Remove files from iTunes library w/ progress indicator
-    * Upon success, delete files that have been selected
 
 """
 # ---*< Standard imports >*----------------------------------------------------
@@ -47,9 +21,6 @@ from appscript import app, k, CommandError #@UnresolvedImport
 # ---*< Initialization >*------------------------------------------------------
 """The name of the playlist of files to kill.  Any type of playlist."""
 PLAYLIST_NAME = 'Files to kill'
-
-"""Unbuffer stdout"""
-
 
 # ---*< Code >*----------------------------------------------------------------
 class ITunesManager(object):
@@ -106,6 +77,12 @@ class ITunesManager(object):
 
 def delete_tracks(tracks):
     """Deletes a list of tracks from iTunes.
+    
+    --> BE CAREFUL WITH THIS!!!! <--
+
+    Note that I don't prompt for verification before each file.  I make no
+    warranty or guarantee that this won't completely destroy your entire
+    library.  USE AT YOUR OWN RISK!
     
     :param tracks: :list: of iTunes tracks, NOT track IDs.  They
                    will be deleted from disk and from the library. 
