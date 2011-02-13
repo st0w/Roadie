@@ -23,6 +23,24 @@ from appscript import app, k, CommandError #@UnresolvedImport
 PLAYLIST_NAME = 'Files to kill'
 
 # ---*< Code >*----------------------------------------------------------------
+def smart_str(s, encoding='utf-8', strings_only=False, errors='strict'):
+    """
+    Returns a bytestring version of 's', encoded as specified in 'encoding'.
+
+    If strings_only is True, don't convert (some) non-string-like objects.
+    """
+    try:
+        return str(s)
+    except UnicodeEncodeError:
+        if isinstance(s, Exception):
+            # An Exception subclass containing non-ASCII data that doesn't
+            # know how to print itself properly. We shouldn't raise a
+            # further exception.
+            return ' '.join([smart_str(arg, encoding, strings_only,
+                    errors) for arg in s])
+        return unicode(s).encode(encoding, errors)
+
+
 class ITunesManager(object):
     """Handles connecting to and sending operations to iTunes
     """
@@ -60,15 +78,15 @@ class ITunesManager(object):
         if not only_audio:
             return self.itunes.tracks()
 
-        tracks = []
+        all_tracks = []
 
         for t in self.itunes.tracks():
             if t.kind() in self.audio_types:
-                tracks.append(t)
+                all_tracks.append(t)
 #            else:
 #                print 'UNKNOWN KIND: %s' % t.kind()
 
-        return tracks
+        return all_tracks
 
     def remove_dead_tracks(self, only_audio=True):
         """Removes all dead items (entries without a corresponding file)
@@ -77,9 +95,15 @@ class ITunesManager(object):
         self._connect_to_itunes()
         tracks = self.get_all_tracks(only_audio)
 
+        count = 0
+
         for t in tracks:
             if t.location() == k.missing_value:
-                print "Missing: %s" % t.name()
+                sys.stderr.write('Deleting %s - %s\n' % (smart_str(t.artist()), smart_str(t.name())))
+                t.delete()
+                count += 1
+
+        sys.stdout.write('Found and deleted %d dead tracks\n' % count)
 
     def get_tracks_from_playlist(self, playlist=PLAYLIST_NAME):
         """Returns a list of all the tracks in a given playlist

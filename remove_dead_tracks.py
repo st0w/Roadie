@@ -21,24 +21,15 @@ track object.
 
 """
 # ---*< Standard imports >*----------------------------------------------------
-import sys
 
 # ---*< Third-party imports >*-------------------------------------------------
 
 # ---*< Local imports >*-------------------------------------------------------
-from itunes import ITunesManager, delete_tracks
+from itunes import ITunesManager
 
 # ---*< Initialization >*------------------------------------------------------
-"""The name of the playlist of files to kill.  Any type of playlist."""
-PLAYLIST_NAME = 'Files to kill'
 
 # ---*< Code >*----------------------------------------------------------------
 if __name__ == "__main__":
     itunes = ITunesManager()#IGNORE:C0103
-
-    target_playlist = (sys.argv[1] if len(sys.argv) > 1#IGNORE:C0103
-                       else PLAYLIST_NAME)
-
-    dyingtracks = itunes.get_tracks_from_playlist(target_playlist)#IGNORE:C0103
-    if len(dyingtracks) > 0:
-        delete_tracks(dyingtracks)
+    itunes.remove_dead_tracks()
