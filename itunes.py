@@ -23,22 +23,24 @@ from appscript import app, k, CommandError #@UnresolvedImport
 PLAYLIST_NAME = 'Files to kill'
 
 # ---*< Code >*----------------------------------------------------------------
-def smart_str(s, encoding='utf-8', strings_only=False, errors='strict'):
+def smart_str(oldstr, encoding='utf-8', strings_only=False, errors='strict'):
     """
-    Returns a bytestring version of 's', encoded as specified in 'encoding'.
-
+    Returns a bytestring version of 'oldstr', encoded as specified in 'encoding'.
+    
     If strings_only is True, don't convert (some) non-string-like objects.
+
+    Stol....borrowed.... from Django.
     """
     try:
-        return str(s)
+        return str(oldstr)
     except UnicodeEncodeError:
-        if isinstance(s, Exception):
+        if isinstance(oldstr, Exception):
             # An Exception subclass containing non-ASCII data that doesn't
             # know how to print itself properly. We shouldn't raise a
             # further exception.
             return ' '.join([smart_str(arg, encoding, strings_only,
-                    errors) for arg in s])
-        return unicode(s).encode(encoding, errors)
+                    errors) for arg in oldstr])
+        return unicode(oldstr).encode(encoding, errors)
 
 
 class ITunesManager(object):
@@ -99,7 +101,8 @@ class ITunesManager(object):
 
         for t in tracks:
             if t.location() == k.missing_value:
-                sys.stderr.write('Deleting %s - %s\n' % (smart_str(t.artist()), smart_str(t.name())))
+                sys.stderr.write('Deleting %s - %s\n' % (smart_str(t.artist()),
+                                                         smart_str(t.name())))
                 t.delete()
                 count += 1
 
