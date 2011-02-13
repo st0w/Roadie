@@ -48,12 +48,9 @@ def sync_dir(dirname, recursive=True):
     """Now traverse the desired file hierarchy and add files"""
     print "Walking dir tree..."
     for root, dirs, files in os.walk(dirname):
-#        print '--------'
-#        print files
         skipping = False
         for skipdir in EXCLUDE_DIRS:
             if root.find(skipdir) == 0:
-#                print "SKIPPING %s" % root
                 skipping = True
 
         if skipping:
