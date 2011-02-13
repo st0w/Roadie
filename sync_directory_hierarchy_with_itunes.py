@@ -15,6 +15,7 @@ given directory and adds them to iTunes.
 
 """
 # ---*< Standard imports >*----------------------------------------------------
+import os
 import sys
 
 # ---*< Third-party imports >*-------------------------------------------------
@@ -25,6 +26,8 @@ from itunes import ITunesManager
 
 # ---*< Initialization >*------------------------------------------------------
 DEFAULT_DIR = '/srv/multimedia/Music'
+EXCLUDE_DIRS = ['/srv/multimedia/Music/Production',
+                ]
 
 # ---*< Code >*----------------------------------------------------------------
 
@@ -36,21 +39,45 @@ def sync_dir(dirname, recursive=True):
     """
     itunes = ITunesManager()#IGNORE:C0103
     tracks = itunes.get_all_tracks()
-#    tracks()[0].location()
-#    print t.size()
-    files = []
+
+    itunes_files = []
+    new_files = []
     i = 0
     count = len(tracks)
 
-    print "Removing dead tracks"
-    itunes.remove_dead_tracks()
+    """Now traverse the desired file hierarchy and add files"""
+    print "Walking dir tree..."
+    for root, dirs, files in os.walk(dirname):
+#        print '--------'
+#        print files
+        skipping = False
+        for skipdir in EXCLUDE_DIRS:
+            if root.find(skipdir) == 0:
+#                print "SKIPPING %s" % root
+                skipping = True
 
+        if skipping:
+            continue
+
+#        sys.stderr.write('\r%s        ' % root)
+        if '.DS_Store' in files:
+            files.remove('.DS_Store')
+
+        new_files += ['%s/%s' % (root, f) for f in files]
+
+    print "done"
+    print len(new_files)
+    print new_files
+    sys.exit(0)
+
+
+    """Build a list containing full paths to all files in iTunes library"""
     for t in tracks:
         i += 1
         sys.stderr.write('\rProcessing %s/%s' % (i, count))
         try:
             if t.location() != k.missing_value:
-                files.append(t.location().path)
+                itunes_files.append(t.location().path)
         except CommandError as e:
 #            print t.name()
             sys.stderr.write('\nOops... Error getting location for %s: %s\n' %
@@ -58,7 +85,7 @@ def sync_dir(dirname, recursive=True):
 
 
     print "\n%s" % dirname
-    print len(files)
+    print len(itunes_files)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
