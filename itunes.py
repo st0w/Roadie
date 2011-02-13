@@ -27,6 +27,15 @@ class ITunesManager(object):
     """Handles connecting to and sending operations to iTunes
     """
     itunes = None
+    audio_types = ['AAC audio file',
+                   'MPEG audio file',
+                   'Protected AAC audio file',
+                   'Purchased AAC audio file',
+                   'WAV audio file',
+                   ]
+    video_type = ['MPEG-4 video file',
+                  'QuickTime movie file',
+                  ]
 
     def __init__(self):
         """__init__ method.  Takes no options."""
@@ -37,8 +46,29 @@ class ITunesManager(object):
         """Establishes a connection to iTunes.  You won't need to use this."""
         if not self.itunes:
             self.itunes = app('iTunes')
-        else:
-            print "already connected to iTunes"
+#        else:
+#            print "already connected to iTunes"
+
+    def get_all_tracks(self, only_audio=True):
+        """Returns a list containing all the tracks in iTunes
+        
+        :param only_audio: `bool` indicating if only audio tracks should be
+                            returned, or if all items should be returned.
+        """
+        self._connect_to_itunes()
+
+        if not only_audio:
+            return self.itunes.tracks()
+
+        tracks = []
+
+        for t in self.itunes.tracks():
+            if t.kind() in self.audio_types:
+                tracks.append(t)
+#            else:
+#                print 'UNKNOWN KIND: %s' % t.kind()
+
+        return tracks
 
     def get_tracks_from_playlist(self, playlist=PLAYLIST_NAME):
         """Returns a list of all the tracks in a given playlist
@@ -62,7 +92,7 @@ class ITunesManager(object):
             return []
 
         sys.stdout.write('Obtaining copy of iTunes library...')
-        library_tracks = self.itunes.tracks()
+        library_tracks = self.get_all_tracks()
         sys.stdout.write('done\n')
 
         tracks_to_kill = []

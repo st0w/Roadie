@@ -18,6 +18,7 @@ given directory and adds them to iTunes.
 import sys
 
 # ---*< Third-party imports >*-------------------------------------------------
+from appscript import k, CommandError
 
 # ---*< Local imports >*-------------------------------------------------------
 from itunes import ITunesManager
@@ -34,10 +35,27 @@ def sync_dir(dirname, recursive=True):
     :param recursive: `bool` whether or not to recursively sync
     """
     itunes = ITunesManager()#IGNORE:C0103
-    t = itunes.itunes.tracks()[0]
-    print t.size()
+    tracks = itunes.get_all_tracks()
+#    tracks()[0].location()
+#    print t.size()
+    files = []
+    i = 0
+    count = len(tracks)
 
-    print dirname
+    for t in tracks:
+        i += 1
+        sys.stderr.write('\rProcessing %s/%s' % (i, count))
+        try:
+            if t.location() != k.missing_value:
+                files.append(t.location().path)
+        except CommandError as e:
+#            print t.name()
+            sys.stderr.write('\nOops... Error getting location for %s: %s\n' %
+                             (t.name(), str(e)))
+
+
+    print "\n%s" % dirname
+    print len(files)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
