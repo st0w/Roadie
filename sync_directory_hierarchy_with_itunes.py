@@ -42,6 +42,9 @@ def sync_dir(dirname, recursive=True):
     i = 0
     count = len(tracks)
 
+    print "Removing dead tracks"
+    itunes.remove_dead_tracks()
+
     for t in tracks:
         i += 1
         sys.stderr.write('\rProcessing %s/%s' % (i, count))

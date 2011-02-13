@@ -70,6 +70,17 @@ class ITunesManager(object):
 
         return tracks
 
+    def remove_dead_tracks(self, only_audio=True):
+        """Removes all dead items (entries without a corresponding file)
+        from the iTunes music library
+        """
+        self._connect_to_itunes()
+        tracks = self.get_all_tracks(only_audio)
+
+        for t in tracks:
+            if t.location() == k.missing_value:
+                print "Missing: %s" % t.name()
+
     def get_tracks_from_playlist(self, playlist=PLAYLIST_NAME):
         """Returns a list of all the tracks in a given playlist
         
