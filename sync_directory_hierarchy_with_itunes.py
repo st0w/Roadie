@@ -16,6 +16,11 @@ given directory and adds them to iTunes.
 Certain files are excluded based upon their extension.  Change the
 definition of IGNORE_EXTENSIONS to alter this.
 
+If you have a lot of files to add.... this take a LOONNNNNNNGGGG time.
+But it works.  I used it to add over 8,000 missing files to my library,
+and while it ran for the better part of maybe 36 hours, it did 
+eventually complete successfully.
+
 """
 # ---*< Standard imports >*----------------------------------------------------
 import os
