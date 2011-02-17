@@ -21,6 +21,12 @@ But it works.  I used it to add over 8,000 missing files to my library,
 and while it ran for the better part of maybe 36 hours, it did 
 eventually complete successfully.
 
+Thoughts for the future:
+  * Possibly add ability to use locate db instead of find.  Would have
+    to check age of locate DB.  Maybe we store last run locate db 
+    date/time and warn of need to use find if locate db hasn't been 
+    updated?
+
 """
 # ---*< Standard imports >*----------------------------------------------------
 import os
