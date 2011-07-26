@@ -29,6 +29,23 @@ Thoughts for the future:
     date/time and warn of need to use find if locate db hasn't been 
     updated?
 
+TODO:
+  Add counter to "Now removing existing entries from list of files to add..."
+
+Something... is clearly wrong here..... Maybe not correctly removing the found entries?
+
+  Walking dir tree(s)...done.  Identified 21924 files.
+  Examining existing iTunes Library...
+  Processing 15371/15371 <- music in iTunes was 15014 before running
+  Done.  Now removing existing entries from list of files to add...
+  ./sync_directory_hierarchy_with_itunes.py:172: UnicodeWarning: Unicode equal comparison failed to convert both arguments to Unicode - interpreting them as being unequal
+    the hierarchy and thus includes all of the iTunes library plus more.
+    Post processing, preparing to add 7912 new files to existing library of 15371 files...
+
+  Fix this shit:
+  ./sync_directory_hierarchy_with_itunes.py:172: UnicodeWarning: Unicode equal comparison failed to convert both arguments to Unicode - interpreting them as being unequal
+    the hierarchy and thus includes all of the iTunes library plus more.
+
 """
 # ---*< Standard imports >*----------------------------------------------------
 import os
