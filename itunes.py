@@ -15,6 +15,8 @@ import sys
 
 # ---*< Third-party imports >*-------------------------------------------------
 from appscript import app, k, CommandError #@UnresolvedImport
+from dictshield.document import Document
+from dictshield.fields import DateTimeField, IntField, ListField, StringField
 
 # ---*< Local imports >*-------------------------------------------------------
 
@@ -41,6 +43,15 @@ def smart_str(oldstr, encoding='utf-8', strings_only=False, errors='strict'):
             return ' '.join([smart_str(arg, encoding, strings_only,
                     errors) for arg in oldstr])
         return unicode(oldstr).encode(encoding, errors)
+
+
+class iTunesTrack(Document):
+    """iTunes Track model
+    """
+    md5 = StringField()
+    rating = IntField(min_value=0, max_value=100, default=0)
+    ids = ListField(IntField())
+    date_added = DateTimeField()
 
 
 class ITunesManager(object):
