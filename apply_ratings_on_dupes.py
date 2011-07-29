@@ -5,68 +5,63 @@
 # Copyright (C) 2011 st0w <st0w@st0w.com>
 #
 # This is released under the MIT License.
-"""Synchronizes ratings and date added to identical tracks
+"""Synchronizes ratings on identical tracks
 
 Created on Jul 26, 2011
 
 Does not prompt for verification
 
-This is slow.  It has to hash every file, which on a large library
-takes quite some time.  This is because iTunes provides no hash value
-stored in the DB to use as a basis.  But it also ensure that only tracks
-that are EXACT duplicates are altered.
+This came about because when moving files around, iTunes becomes unaware
+of the new location and loses its entries for the files.  Because I DJ,
+I use ratings very heavily to help sort music I buy.  When I rearrange
+things, I want to keep track of those without having to go through and
+force iTunes to update the library by editing the XML and forcing a
+rebuild of the library from it.
+
+Note that this process will lose things like play count - I don't really
+care about those, but this script could easily be extended to keep those
+as well.  Ultimately, this could be extended to do anything you can do
+by tweaking the XML and forcing a rebuild, so this becomes much easier
+for management since it can be automated.  If you make changes, I would
+love it if you submit a patch or pull request!
 
 Uses its own non-persistent SQLite DB for data storage/retrieval.  The
-contents of this DB are reset every time it starts.
+contents of this DB are reset every time it starts.  Yes, there's a
+race condition here - so don't run more than one instance at a time, or
+you'll make the world explode causing a giant sinkhole.
 
-As currently written, this finds duplicates based on track MD5 hashes.
+As currently written, this finds duplicates in the iTunes Library based
+on a hash of various ID3 components (see `gen_hash()` below).  I
+initially wanted this to be based off file MD5 hashes, but that doesn't
+work when the library reference is invalid because iTunes doesn't return
+the OLD location of the file, it returns `k.missing_value`
+
 If dupes are found and one lacks ratings, then ratings are set.  If
-multiple are found and they have different ratings, the difference is
-reported but no changes are made.
+multiple are found and they have different ratings, the highest rating
+is assumed to be the correct one and all matches are set to that.  This
+could ultimately be changed to allow control of this behavior via a
+command-line switch.
 
-Also, this sets the date added to be the oldest date added on all files
-found.
+IDs for prior entries with the same hash are retained, for quick
+retrieval and updating when subsequent matches are found.
+
+TODO: Provide the option to automatically preen dead entries upon
+      completion, if their information was replicated to at least
+      one existing track.
 
 """
 # ---*< Standard imports >*----------------------------------------------------
 from datetime import datetime
 from hashlib import md5
 import json
-import sqlite3
 import time
 
 # ---*< Third-party imports >*-------------------------------------------------
 
 # ---*< Local imports >*-------------------------------------------------------
-from itunes import ITunesManager, iTunesTrack
+from itunes import init_db_conn, ITunesManager, iTunesTrack
 
 # ---*< Initialization >*------------------------------------------------------
-def init_db_conn():
-    db_conn = sqlite3.connect('itunes-dupes.db',
-                              detect_types=sqlite3.PARSE_DECLTYPES
-                              | sqlite3.PARSE_COLNAMES)
-    db_conn.row_factory = sqlite3.Row # fields by names
-    setup_db(db_conn)
-
-    return db_conn
-
-def setup_db(db):
-    """Initializes a database if empty
-
-    The DB schema is keyed on the MD5 of the file, and the stored JSON
-    contains the md5 and all data in the iTunesTrack object.  Indexing
-    is also provided on file path, in case there are multiple reference
-    to the same actual file.
-    """
-    db.execute('''DROP TABLE IF EXISTS dupe_finder;''')
-    db.execute('''
-        CREATE TABLE dupe_finder(
-            md5 TEXT PRIMARY KEY,
-            data json
-        )
-    ''')
-
-
 def gen_hash(track):
     m = md5()
     body = '%s - %s - %s - %s - %s' % (track.artist(),
@@ -120,18 +115,19 @@ def save_track(tunes, db, track):
 
         # Have to convert to ISO format
         track_entry.date_added = track_datetime_to_python(track.date_added())
-        #print track_entry.date_added
 
     elif len(rows) == 1:
         data = json.loads(rows[0]['data'])
         track_entry = iTunesTrack(**data)
-        #print track_entry.date_added
 
         if track.id() not in track_entry.ids:
             track_entry.ids.append(track.id())
 
         # Compare values and save appropriate ones in the db
         # First, compare the date added and set it to the older one
+        #
+        # Currently this does NOTHING.  iTunes considers date_added to
+        # be a read-only field, so it can't be changed.  Thanks Apple!
         dt = track_datetime_to_python(track.date_added())
         if dt < track_entry.date_added:
             track_entry.date_added = dt
@@ -151,7 +147,7 @@ def save_track(tunes, db, track):
 
     else:
         raise ValueError('Unexpected results (%d) found for track %s' % 
-                         track.name())
+                         len(rows), track.name())
 
     track_entry.validate()
 
@@ -177,8 +173,6 @@ def save_track(tunes, db, track):
         for t in tracks.get():
             """Update entries if their id is also in track_entry.ids"""
             if t.id() in track_entry.ids:
-                #print 'Got one!  %s\t%s' % (t.id(), t.artist())
-
                 # Update the rating 
                 t.rating.set(track_entry.rating)
 
@@ -199,12 +193,10 @@ def update_ratings(itunes):
     # is found.  This obviates the need to re-review the data after
     # processing all tracks.
     for t in itunes.itunes.tracks():
-        #if t.artist() == 'Ehren Stowers':
         track_hash = gen_hash(t)
         print '%s\t%d\t%d\t%s' % (track_hash, t.id(), t.rating(), t.name())
         save_track(itunes, db, t)
 
-    print itunes.itunes.library_playlists[1]
 
 if __name__ == "__main__":
 

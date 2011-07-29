@@ -11,6 +11,7 @@ Created on Feb 12, 2011
 """
 # ---*< Standard imports >*----------------------------------------------------
 import os
+import sqlite3
 import sys
 
 # ---*< Third-party imports >*-------------------------------------------------
@@ -25,6 +26,43 @@ from dictshield.fields import DateTimeField, IntField, ListField, StringField
 PLAYLIST_NAME = 'Files to kill'
 
 # ---*< Code >*----------------------------------------------------------------
+def init_db_conn():
+    db_conn = sqlite3.connect('itunes-manager.db',
+                              detect_types=sqlite3.PARSE_DECLTYPES
+                              | sqlite3.PARSE_COLNAMES)
+    db_conn.row_factory = sqlite3.Row # fields by names
+    setup_db(db_conn)
+
+    return db_conn
+
+
+def setup_db(db):
+    """Initializes a database if empty
+
+    The DB schema is keyed on the MD5 of the file, and the stored JSON
+    contains the md5 and all data in the iTunesTrack object.  Indexing
+    is also provided on file path, in case there are multiple reference
+    to the same actual file.
+
+    TODO: Should table creation be removed and done by caller?
+    """
+    db.execute('''DROP TABLE IF EXISTS dupe_finder;''')
+    db.execute('''
+        CREATE TABLE dupe_finder(
+            md5 TEXT PRIMARY KEY,
+            data json
+        )
+    ''')
+
+    db.execute('''DROP TABLE IF EXISTS sync_hierarchy;''')
+    db.execute('''
+        CREATE TABLE sync_hierarchy(
+            path TEXT PRIMARY KEY,
+            data json
+        )
+    ''')
+
+
 def smart_str(oldstr, encoding='utf-8', strings_only=False, errors='strict'):
     """
     Returns a bytestring version of 'oldstr', encoded as specified in 'encoding'.
@@ -49,6 +87,7 @@ class iTunesTrack(Document):
     """iTunes Track model
     """
     md5 = StringField()
+    path = StringField()
     rating = IntField(min_value=0, max_value=100, default=0)
     ids = ListField(IntField())
     date_added = DateTimeField()
@@ -153,6 +192,7 @@ class ITunesManager(object):
         sys.stdout.write('done\n')
 
         return tracks_to_kill
+
 
 def delete_tracks(tracks):
     """Deletes a list of tracks from iTunes.
