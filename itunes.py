@@ -13,6 +13,7 @@ Created on Feb 12, 2011
 import os
 import sqlite3
 import sys
+import tempfile
 
 # ---*< Third-party imports >*-------------------------------------------------
 from appscript import app, k, CommandError #@UnresolvedImport
@@ -26,8 +27,31 @@ from dictshield.fields import DateTimeField, IntField, ListField, StringField
 PLAYLIST_NAME = 'Files to kill'
 
 # ---*< Code >*----------------------------------------------------------------
-def init_db_conn():
-    db_conn = sqlite3.connect('itunes-manager.db',
+def init_db_conn(persist=False, db_file=None):
+    """Setups up the SQLite DB handle
+
+    Sets up the necessary connection to the DB.  Note that this also
+    runs setup_db to initialize it.  Defaults to using only memory.
+
+    :param persist: (optional) `boolean` indicating whether SQLite
+                    should use a persistent file (True) or should just
+                    run in memory (False, and the default)
+    :param db_file: (optional) `str` containing the path of the DB file
+                    to use.  If None or blank, will generate a secure
+                    temp file.
+    :rtype: `sqlite3.Db` connection handle
+    """
+    if persist:
+        if not db_file:
+            db_file = tempfile.NamedTemporaryFile(delete=False).name
+
+        print 'DB File: %s' % db_file
+
+    else:
+        db_file = ':memory:'
+        print 'Using memory for SQLite DB'
+
+    db_conn = sqlite3.connect(db_file,
                               detect_types=sqlite3.PARSE_DECLTYPES
                               | sqlite3.PARSE_COLNAMES)
     db_conn.row_factory = sqlite3.Row # fields by names
