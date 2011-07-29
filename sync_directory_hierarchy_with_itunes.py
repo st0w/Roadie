@@ -58,6 +58,8 @@ from itunes import init_db_conn, ITunesManager, iTunesTrack
 # Dir to start in.  Preferably a unicode string, because it is used as
 # such later.
 DEFAULT_DIR = u'.'
+
+# Extensions to be added to iTunes
 INCLUDE_EXTENSIONS = re.compile('^.+\.('
                                 '(aiff)|(m4a)|(m4p)|(mp2)|(mp3)|(mp4)|(wav)'
                                 ')$', re.IGNORECASE)
@@ -67,7 +69,12 @@ EXCLUDE_DIR_REGEX = re.compile('^('
     '/Volumes/multimedia/Music/(incoming|Production|iTunes)'
 ')')
 
+# DB table name
 table_name = 'sync_hierarchy'
+
+# iTunes AppleScript timeout - if you are adding large files, you may
+# need to increase this if you get -1712 Apple event timed out errors
+AS_TIMEOUT = 300 # seconds
 
 def add_track(db, track, commit=True):
     """Adds a track from iTunes to the sync temporary DB
@@ -216,7 +223,7 @@ def sync_dir(db, path, silent=False):
                 # Add to iTunes
                 f_alias = Alias(f)
 
-                itunes_track = lib.add([f_alias,])
+                itunes_track = lib.add([f_alias,], timeout=AS_TIMEOUT)
 
                 if not itunes_track:
                     failures.append(f)
@@ -226,7 +233,8 @@ def sync_dir(db, path, silent=False):
                     successes.append(f)
 
             if not silent:
-                sys.stdout.write('[Total found: %d New: %d]\r' % (total_found, new_found))
+                sys.stdout.write('[Total found: %d New: %d]\r' % 
+                                 (total_found, new_found))
 
     if not silent:
         print '\n'
@@ -245,9 +253,17 @@ if __name__ == '__main__':
 
     # Report on our successes and failures, openly.  We share.
     for s in success:
-        print 'Added: %s' % s
+        try:
+            print 'Added: %s' % s
+        except UnicodeEncodeError:
+            print 'Added: ',
+            print s.encode('utf-16')
 
     print ''
 
     for f in failure:
-        print 'Failed to add: %s' % f
+        try:
+            print 'Failed to add: %s' % f
+        except UnicodeEncodeError:
+            print 'Failed to add: ',
+            print s.encode('utf-16')
