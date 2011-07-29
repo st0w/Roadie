@@ -10,16 +10,16 @@
 Rewritten on Jul 28, 2011
 Created on Feb 12, 2011
 
-Every time this script has failed to add a track to the library, I have
-also been unable to add the track manually.  If you find an instance
-where the script fails to add something but you CAN add it manually,
-PLEASE contact me!
-
 I manage my music stores manually, as I am very particular about how
 they are organized.  The problem is, there's no easy way to have iTunes
 import new content without getting a ton of random duplicates.  I'm sure
 it is finding some tiny detail different about the files, but I'm not
 about to try to determine what every time I want to add music.
+
+Every time this script has failed to add a track to the library, I have
+also been unable to add the track manually.  If you find an instance
+where the script fails to add something but you CAN add it manually,
+PLEASE contact me!
 
 This works by creating a temporary local SQLite filed-based database,
 populating it with the path to all the files in your iTunes library, and
@@ -149,23 +149,31 @@ def db_track_exists(db, path):
                          'while looking for %s' % (count, path))
 
 
-def sync_dir(db, path):
+def sync_dir(db, path, silent=False):
     """Recursively synchronizes a directory hierarchy with iTunes
-    
+   
+    :param db: `sqlite3.Db` handle to the working DB
     :param dirname: `string` of the root directory
+
     """
     sys.stdout.write('Connecting to iTunes...')
     itunes_manager = ITunesManager()#IGNORE:C0103
     sys.stdout.write('done\n')
 
     # Toss iTunes Library into temp DB
-    print 'Extracting file paths from iTunes library...'
+    if not silent:
+        print 'Extracting file paths from iTunes library...'
+
     count = itunes_manager.itunes.tracks.count(each=k.item)
     for (i, t) in enumerate(itunes_manager.itunes.tracks()):
         """If it's missing, add the track name and id to a list"""
-        sys.stdout.write('[%d/%d (%.02f%%)]\r' % (i, count, (100 * float(i)/count)))
+        if not silent:
+            sys.stdout.write('[%d/%d (%.02f%%)]\r' % (i, count, (100 * float(i)/count)))
+
         if t.location() == k.missing_value:
-            print "***** MISSING: %d - %s - %s" % (t.id(), t.artist(), t.name())
+            if not silent:
+                print "***** MISSING: %d - %s - %s" % (t.id(), t.artist(), t.name())
+
         else:
             add_track(db, t, False)
 
@@ -178,7 +186,9 @@ def sync_dir(db, path):
     successes = []
     failures = []
     lib = itunes_manager.itunes.library_playlists[1]
-    sys.stdout.write('Traversing file system from current directory...\n')
+
+    if not silent:
+        sys.stdout.write('Traversing file system from current directory...\n')
 
     # Try to work with unicode
     if not isinstance(path, unicode):
@@ -202,13 +212,6 @@ def sync_dir(db, path):
 
             if not db_track_exists(db, f):
                 new_found += 1
-                print ' +++ Adding:',
-                try:
-                    print f,
-                except UnicodeEncodeError:
-                    print f.encode('utf-16'),
-
-                print '...',
 
                 # Add to iTunes
                 f_alias = Alias(f)
@@ -216,25 +219,31 @@ def sync_dir(db, path):
                 itunes_track = lib.add([f_alias,])
 
                 if not itunes_track:
-                    #print 'Failed'
                     failures.append(f)
                 else:
                     # Add to DB
                     add_track(db, itunes_track)
                     successes.append(f)
-                    #print 'Success!'
 
-            sys.stdout.write('[Total found: %d New: %d]\r' % (total_found, new_found))
+            if not silent:
+                sys.stdout.write('[Total found: %d New: %d]\r' % (total_found, new_found))
 
-    print '\n'
+    if not silent:
+        print '\n'
+
     return (successes, failures)
 
 if __name__ == '__main__':
+    # Unbuffer stdout
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) # TEMP DEBUG
+
+    # Setup DB
     db = init_db_conn()
 
+    # Do it up!
     (success, failure) = sync_dir(db, DEFAULT_DIR)
 
+    # Report on our successes and failures, openly.  We share.
     for s in success:
         print 'Added: %s' % s
 
