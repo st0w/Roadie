@@ -10,6 +10,11 @@
 Rewritten on Jul 28, 2011
 Created on Feb 12, 2011
 
+Every time this script has failed to add a track to the library, I have
+also been unable to add the track manually.  If you find an instance
+where the script fails to add something but you CAN add it manually,
+PLEASE contact me!
+
 I manage my music stores manually, as I am very particular about how
 they are organized.  The problem is, there's no easy way to have iTunes
 import new content without getting a ton of random duplicates.  I'm sure
@@ -50,9 +55,8 @@ from mactypes import Alias
 from itunes import init_db_conn, ITunesManager, iTunesTrack
 
 # ---*< Initialization >*------------------------------------------------------
-# Dir to start in.  If you don't pasa a unicode-encoded string here and
-# your file system contains any files that aren't simple ASCII, the
-# script will croak.
+# Dir to start in.  Preferably a unicode string, because it is used as
+# such later.
 DEFAULT_DIR = u'.'
 INCLUDE_EXTENSIONS = re.compile('^.+\.('
                                 '(aiff)|(m4a)|(m4p)|(mp2)|(mp3)|(mp4)|(wav)'
@@ -171,6 +175,8 @@ def sync_dir(db, path):
     # Now that everything is in the DB, begin walking the file system
     total_found = 0
     new_found = 0
+    successes = []
+    failures = []
     lib = itunes_manager.itunes.library_playlists[1]
     sys.stdout.write('Traversing file system from current directory...\n')
 
@@ -183,51 +189,16 @@ def sync_dir(db, path):
 
         # Skip entries that match the regex
         if EXCLUDE_DIR_REGEX.match(root):
-            print 'SKIPPING ',
-            print root
             continue
 
         # Only work with files we care about
         prune_juice = [x for x in files if INCLUDE_EXTENSIONS.match(x)]
         total_found += len(prune_juice)
 
-        #excluded = [x for x in files if not INCLUDE_EXTENSIONS.match(x)]
-        #print '******ALL: %s\-------------' % files
-        #print '------EXCLUDED: %s\-------------' % excluded
-        #print '++++++inCLUDED: %s\-------------' % prune_juice
-        #for x in prune_juice:
-            #try:
-                #print root + os.sep + x
-            #except UnicodeEncodeError:
-                #print root.encode('utf-16') + os.sep + x.encode('utf-16')
-
         # As each file is encountered, check for it in the DB
         # if not found, tell iTunes to add it and then add it to the DB
         for f in prune_juice:
-            #print '------'
-            #f = root + os.sep + f
-            #f = u'%s/%s' % (unicode(root, errors='replace'), f)
-            #print f.encode("utf-16")
-            #print type(f)
-            #f = unicode(f, 'utf-16')
-            #print f.encode('utf-16')
-            #print type(root)
-            #print type(os.sep)
-            #print type(f)
             f = root + os.sep + f
-            #print type(f)
-            #f = u'/%s' % f #(unicode(f, errors='replace'))
-
-            #try:
-                #print f
-            #except UnicodeEncodeError:
-                #"""
-                #HFS+ (OSX) uses UTF-16 encoding for filenames.  So if 
-                #we get an encoding here, try to force UTF-16
-                #"""
-                #print f.encode('utf-16')
-
-            #f = unicode('%s/%s' % (root, f), errors='replace')
 
             if not db_track_exists(db, f):
                 new_found += 1
@@ -241,24 +212,33 @@ def sync_dir(db, path):
 
                 # Add to iTunes
                 f_alias = Alias(f)
-                #f_alias = File(f).hfspath
 
-                #itunes_track = itunes_manager.itunes.add([f_alias,])
                 itunes_track = lib.add([f_alias,])
 
                 if not itunes_track:
-                    print 'Failed'
-                    #ValueError('Failed while trying to add %s' % f_alias.path)
+                    #print 'Failed'
+                    failures.append(f)
                 else:
                     # Add to DB
                     add_track(db, itunes_track)
-                    print 'Success!'
+                    successes.append(f)
+                    #print 'Success!'
 
             sys.stdout.write('[Total found: %d New: %d]\r' % (total_found, new_found))
 
     print '\n'
+    return (successes, failures)
 
 if __name__ == '__main__':
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) # TEMP DEBUG
     db = init_db_conn()
-    sync_dir(db, DEFAULT_DIR)
+
+    (success, failure) = sync_dir(db, DEFAULT_DIR)
+
+    for s in success:
+        print 'Added: %s' % s
+
+    print ''
+
+    for f in failure:
+        print 'Failed to add: %s' % f
