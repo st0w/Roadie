@@ -7,231 +7,258 @@
 # This is released under the MIT License.
 """Adds all files to iTunes that aren't already in library.
 
+Rewritten on Jul 28, 2011
 Created on Feb 12, 2011
 
-Note that this only looks at the actual filename/path.  It doesn't check
-for duplicate status or anything like that.  Just finds files below a
-given directory and adds them to iTunes.
+I manage my music stores manually, as I am very particular about how
+they are organized.  The problem is, there's no easy way to have iTunes
+import new content without getting a ton of random duplicates.  I'm sure
+it is finding some tiny detail different about the files, but I'm not
+about to try to determine what every time I want to add music.
 
-Certain files are excluded based upon their extension.  Change the
-definition of IGNORE_EXTENSIONS to alter this.
+This works by creating a temporary local SQLite filed-based database,
+populating it with the path to all the files in your iTunes library, and
+then walking the directory hierarchy to find any files that aren't in
+the SQLite DB.  If it finds a file, it tells iTunes to add it.
 
-If you have a lot of files to add.... this take a LOONNNNNNNGGGG time.
-But it works.  I used it to add over 8,000 missing files to my library,
-and while it ran for the better part of maybe 36 hours, it did 
-eventually complete successfully.
+I'm a little unsure about the handling of unicode in here - so let me
+know if you run into issues.
 
-Thoughts for the future:
-  * Would like to find a faster way to do the comparison... slow loop
-    is slow.
-  * Possibly add ability to use locate db instead of find.  Would have
-    to check age of locate DB.  Maybe we store last run locate db 
-    date/time and warn of need to use find if locate db hasn't been 
-    updated?
+This doesn't try to do any kind of smart duplicate checking based on ID3
+tags or anything, it strictly looks at the file path.  Note that if you
+have something in iTunes that currently is 'missing' (i.e., it has that
+circled exclamation mark by it) that iTunes will report that file's path
+as a missing value - so this script will add it again because iTunes
+didn't report it as existing.).
 
-TODO:
-  Add counter to "Now removing existing entries from list of files to add..."
-
-Something... is clearly wrong here..... Maybe not correctly removing the found entries?
-
-  Walking dir tree(s)...done.  Identified 21924 files.
-  Examining existing iTunes Library...
-  Processing 15371/15371 <- music in iTunes was 15014 before running
-  Done.  Now removing existing entries from list of files to add...
-  ./sync_directory_hierarchy_with_itunes.py:172: UnicodeWarning: Unicode equal comparison failed to convert both arguments to Unicode - interpreting them as being unequal
-    the hierarchy and thus includes all of the iTunes library plus more.
-    Post processing, preparing to add 7912 new files to existing library of 15371 files...
-
-  Fix this shit:
-  ./sync_directory_hierarchy_with_itunes.py:172: UnicodeWarning: Unicode equal comparison failed to convert both arguments to Unicode - interpreting them as being unequal
-    the hierarchy and thus includes all of the iTunes library plus more.
+As a bonus, it also reports duplicate tracks in your Library that
+currently have the same path!  I haven't thought about trying to handle
+these dupes automatically yet, but that might come in the future.
 
 """
 # ---*< Standard imports >*----------------------------------------------------
-import os
+import json
 import re
 import sys
+import os
 
 # ---*< Third-party imports >*-------------------------------------------------
-from appscript import k, CommandError
+from appscript import k
 from mactypes import Alias
 
 # ---*< Local imports >*-------------------------------------------------------
-from itunes import ITunesManager, smart_str
+from itunes import init_db_conn, ITunesManager, iTunesTrack
 
 # ---*< Initialization >*------------------------------------------------------
-DEFAULT_DIR = '/srv/multimedia/Music'
-EXCLUDE_DIRS = ['/srv/multimedia/Music/Production',
-                '/srv/multimedia/Music/iTunes/Previous iTunes Libraries',
-                ]
-IGNORE_EXTENSIONS = re.compile('^.+\.('
-                               '(accurip)'
-                               '|(asd)'
-                               '|(avi)'
-                               '|(cue)'
-                               '|(dctmp)'
-                               '|(dmg)'
-                               '|(dylib)'
-                               '|(epub)'
-                               '|(exe)'
-                               '|(flac)'
-                               '|(gif)'
-                               '|(gz)'
-                               '|(htm)'
-                               '|(html)'
-                               '|(ipa)'
-                               '|(iso)'
-                               '|(itc)'
-                               '|(itdb)'
-                               '|(jpeg)'
-                               '|(jpg)'
-                               '|(log)'
-                               '|(m3u)'
-                               '|(m4v)'
-                               '|(md5)'
-                               '|(mov)'
-                               '|(nfo)'
-                               '|(pls)'
-                               '|(rar)'
-                               '|(r\d\d)'
-                               '|(rtf)'
-                               '|(sfv)'
-                               '|(pdf)'
-                               '|(plist)'
-                               '|(png)'
-                               '|(rss)'
-                               '|(so)'
-                               '|(tgz)'
-                               '|(tif)'
-                               '|(tiff)'
-                               '|(tmp)'
-                               '|(torrent)'
-                               '|(txt)'
-                               '|(url)'
-                               '|(xml)'
-                               '|(zip)'
-                               ')$', re.IGNORECASE)
+# Dir to start in.  If you don't pasa a unicode-encoded string here and
+# your file system contains any files that aren't simple ASCII, the
+# script will croak.
+DEFAULT_DIR = u'.'
 INCLUDE_EXTENSIONS = re.compile('^.+\.('
-                               '(m4a)|(m4p)|(mp2)|(mp3)|(mp4)|(wav)'
-                               ')$', re.IGNORECASE)
+                                '(aiff)|(m4a)|(m4p)|(mp2)|(mp3)|(mp4)|(wav)'
+                                ')$', re.IGNORECASE)
 
-# ---*< Code >*----------------------------------------------------------------
+# Used to exclude files below a certain path, matches on start of path
+EXCLUDE_DIR_REGEX = re.compile('^('
+    '/Volumes/multimedia/Music/(incoming|Production|iTunes)'
+')')
 
-def sync_dir(dirname):
+table_name = 'sync_hierarchy'
+
+def add_track(db, track, commit=True):
+    """Adds a track from iTunes to the sync temporary DB
+
+    The sync DB is volatile, and is erased with every instantiation of
+    init_db_conn() in the ITunesManager.
+
+    :param db: `sqlite3.Db` handle to the working DB
+    :param track: `iTunes track` as returned from iTunes via appscript
+    :param commit: `boolean` indicating whether add_track() should call
+                   `db.commit()` after generating the INSERT operation.
+                   If you are going to update a lot of tracks in a
+                   batch, it is MUCH faster to set `commit` to false -
+                   but if you do, be sure you call `db.commit()` once
+                   you've done all the batch operations.  Otherwise,
+                   your changes won't be saved.
+    
+    """
+    track_entry = iTunesTrack()
+    curs = db.cursor()
+
+    # Check if already exists - if it does, add the id of this track to
+    # the list
+    curs.execute('''
+        SELECT data FROM %s WHERE path = ?
+    ''' % table_name, (track.location().path,))
+
+    rows = curs.fetchall()
+    if len(rows) == 0:
+        # Nothing found, so just add track as new
+        track_entry.path = track.location().path
+        track_entry.ids = [track.id(),]
+
+    elif len(rows) == 1:
+        # Found an entry, so add the id to the list and report it
+        data = json.loads(rows[0]['data'])
+        track_entry = iTunesTrack(**data)
+
+        # Data integrity check
+        if track_entry.path != track.location().path:
+            raise ValueError('Path for saved track index and stored JSON '
+                             'object don\'t match.\nJSON: %s\nIndex: %s' %
+                             (track_entry.path, track.location.path()))
+
+        if track.id() not in track_entry.ids:
+            track_entry.ids.append(track.id())
+
+        print ('Duplicate entries found for %s: %s' % 
+               (track_entry.path, ','.join([str(x) for x in track_entry.ids])))
+
+    track_entry.validate()
+
+    curs.execute('''
+        INSERT OR REPLACE INTO %s (path, data) VALUES (?, ?)
+    ''' % table_name, (track_entry.path, track_entry.to_json()))
+
+    if commit:
+        db.commit()
+
+def db_track_exists(db, path):
+    """Checks for existence of a given path in the DB
+
+    :param db: `sqlite3.Db` handle to the working DB
+    :param path: `string` of path to check
+    :rtype: `boolean` indicating whether the track exists in the DB
+    """
+    res = db.execute('''
+        SELECT path FROM %s WHERE path = ?
+    ''' % table_name, (path,))
+
+    count = len(res.fetchall()) # even sqlite3 says the .rowcount is "quirky"
+
+    if count > 0:
+        return True
+    elif count == 0:
+        return False
+    else:
+        raise ValueError('Got %d results for SELECT query in db_track_exists()'
+                         'while looking for %s' % (count, path))
+
+
+def sync_dir(db, path):
     """Recursively synchronizes a directory hierarchy with iTunes
     
     :param dirname: `string` of the root directory
     """
-    itunes = ITunesManager()#IGNORE:C0103
-    tracks = itunes.get_all_tracks()
+    sys.stdout.write('Connecting to iTunes...')
+    itunes_manager = ITunesManager()#IGNORE:C0103
+    sys.stdout.write('done\n')
 
-    itunes_files = []
-    new_files = []
-#    unused_new_files = []
-    i = 0
-    count = len(tracks)
+    # Toss iTunes Library into temp DB
+    print 'Extracting file paths from iTunes library...'
+    count = itunes_manager.itunes.tracks.count(each=k.item)
+    for (i, t) in enumerate(itunes_manager.itunes.tracks()):
+        """If it's missing, add the track name and id to a list"""
+        sys.stdout.write('[%d/%d (%.02f%%)]\r' % (i, count, (100 * float(i)/count)))
+        if t.location() == k.missing_value:
+            print "***** MISSING: %d - %s - %s" % (t.id(), t.artist(), t.name())
+        else:
+            add_track(db, t, False)
 
-    """Now traverse the desired file hierarchy and add files"""
-    sys.stdout.write("Walking dir tree(s)...")
-    for root, dirs, files in os.walk(dirname):
-        skipping = False
-        for skipdir in EXCLUDE_DIRS:
-            if root.find(skipdir) == 0:
-                skipping = True
+    # Commit here after all have been added, for speed
+    db.commit()
 
-        if skipping:
+    # Now that everything is in the DB, begin walking the file system
+    total_found = 0
+    new_found = 0
+    lib = itunes_manager.itunes.library_playlists[1]
+    sys.stdout.write('Traversing file system from current directory...\n')
+
+    # Try to work with unicode
+    if not isinstance(path, unicode):
+        path = unicode(path)
+
+    for root, dirs, files in os.walk(path):
+        root = os.path.abspath(root)
+
+        # Skip entries that match the regex
+        if EXCLUDE_DIR_REGEX.match(root):
+            print 'SKIPPING ',
+            print root
             continue
 
-        if '.DS_Store' in files:
-            files.remove('.DS_Store')
+        # Only work with files we care about
+        prune_juice = [x for x in files if INCLUDE_EXTENSIONS.match(x)]
+        total_found += len(prune_juice)
 
-#        """This will add files using a blacklist - every extension not
-#        in the IGNORE_EXTENSIONS regex
-#        """ 
-#        unused_new_files += ['%s/%s' % (root, f) for f in files if not
-#                      re.match(IGNORE_EXTENSIONS, f)]
+        #excluded = [x for x in files if not INCLUDE_EXTENSIONS.match(x)]
+        #print '******ALL: %s\-------------' % files
+        #print '------EXCLUDED: %s\-------------' % excluded
+        #print '++++++inCLUDED: %s\-------------' % prune_juice
+        #for x in prune_juice:
+            #try:
+                #print root + os.sep + x
+            #except UnicodeEncodeError:
+                #print root.encode('utf-16') + os.sep + x.encode('utf-16')
 
-        """This adds files using a whitelist - only known extensions set
-        in the INCLUDE_EXTENSIONS regex
-        """
-        new_files += ['%s/%s' % (root, f) for f in files if
-                      re.match(INCLUDE_EXTENSIONS, f)]
+        # As each file is encountered, check for it in the DB
+        # if not found, tell iTunes to add it and then add it to the DB
+        for f in prune_juice:
+            #print '------'
+            #f = root + os.sep + f
+            #f = u'%s/%s' % (unicode(root, errors='replace'), f)
+            #print f.encode("utf-16")
+            #print type(f)
+            #f = unicode(f, 'utf-16')
+            #print f.encode('utf-16')
+            #print type(root)
+            #print type(os.sep)
+            #print type(f)
+            f = root + os.sep + f
+            #print type(f)
+            #f = u'/%s' % f #(unicode(f, errors='replace'))
 
-    sys.stdout.write("done.  Identified %d files.\n" % len(new_files))
-#    print len(new_files)
-#    print new_files
-#    for f in new_files:
-##        if not re.match(INCLUDE_EXTENSIONS, f):
-#        print f
-#    sys.exit(0)
+            #try:
+                #print f
+            #except UnicodeEncodeError:
+                #"""
+                #HFS+ (OSX) uses UTF-16 encoding for filenames.  So if 
+                #we get an encoding here, try to force UTF-16
+                #"""
+                #print f.encode('utf-16')
 
+            #f = unicode('%s/%s' % (root, f), errors='replace')
 
-    """Build a list containing full paths to all files in iTunes library"""
-    sys.stdout.write("Examining existing iTunes Library...\n")
-    for t in tracks:
-        i += 1
-        sys.stderr.write('\rProcessing %s/%s' % (i, count))
-        try:
-            if t.location() != k.missing_value:
-                itunes_files.append(t.location().path)
-        except CommandError as e:
-#            print t.name()
-            sys.stderr.write('\nOops... Error getting location for %s: %s\n' %
-                             (t.name(), str(e)))
+            if not db_track_exists(db, f):
+                new_found += 1
+                print ' +++ Adding:',
+                try:
+                    print f,
+                except UnicodeEncodeError:
+                    print f.encode('utf-16'),
 
-    sys.stdout.write("\nDone.  Now removing existing entries from list of "
-                     "files to add...\n")
+                print '...',
 
-    """I thought about the best way to preen the results, analyzing the
-    two lists and such.  Then I decided that more often than not, the
-    hierarchy would contain more files than the iTunes library.  The
-    assumption being, the script is being run to sync the new files in
-    the hierarchy and thus includes all of the iTunes library plus more.
-    
-    Note that I just try to remove it and then catch any exceptions...
-    rather than doing a lookup and only removing existing elements.  I
-    don't know for sure if this is faster, but, it seems like it would be.  
-    """
-    for f in itunes_files:
-        try:
-            new_files.remove(f)
-        except ValueError:
-            pass
+                # Add to iTunes
+                f_alias = Alias(f)
+                #f_alias = File(f).hfspath
 
-    sys.stdout.write('Post processing, preparing to add %d new files to '
-                     'existing library of %d files...\n'
-                     % (len(new_files), len(itunes_files)))
+                #itunes_track = itunes_manager.itunes.add([f_alias,])
+                itunes_track = lib.add([f_alias,])
 
-    """This is where the files are actually added to iTunes
-    
-    With a large import... this is SSLLLLLOOOOOOWWWWWWW... First tried
-    to add one at a time, but that came to a grinding halt around 100.
-    Then tried all at once, and that resulted in a timeout.
-    """
-    aliases = []
-    for f in new_files:
-#        itunes.itunes.add(Alias(f))
-        try:
-            aliases.append(Alias(smart_str(f)))
-        except UnicodeDecodeError:
-            sys.stderr.write('Error trying to Alias/append %s\n' % smart_str(f))
+                if not itunes_track:
+                    print 'Failed'
+                    #ValueError('Failed while trying to add %s' % f_alias.path)
+                else:
+                    # Add to DB
+                    add_track(db, itunes_track)
+                    print 'Success!'
 
-    sys.stdout.write('Now adding %d files to iTunes library...' % len(aliases))
-    try:
-        itunes.itunes.add(aliases)
-    except CommandError as e:
-        sys.stderr.write('Warning: An error occurred trying to add the files.'
-                         '\nPlease note that if the error is "Apple event '
-                         'timed out" that iTunes may very well still be '
-                         '\nprocessing.  Continue to check iTunes and see if '
-                         'this is the case.  If all your files are added, the '
-                         '\nerror can be safely ignored.\n%s' % str(e))
+            sys.stdout.write('[Total found: %d New: %d]\r' % (total_found, new_found))
 
-    sys.stdout.write('Done.\n')
+    print '\n'
 
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        sync_dir(sys.argv[1])
-    else:
-        sync_dir(DEFAULT_DIR)
+if __name__ == '__main__':
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) # TEMP DEBUG
+    db = init_db_conn()
+    sync_dir(db, DEFAULT_DIR)
