@@ -106,7 +106,7 @@ def add_track(db, track, commit=True):
     if len(rows) == 0:
         # Nothing found, so just add track as new
         track_entry.path = track.location().path
-        track_entry.ids = [track.id(),]
+        track_entry.ids = [track.id(), ]
 
     elif len(rows) == 1:
         # Found an entry, so add the id to the list and report it
@@ -122,7 +122,7 @@ def add_track(db, track, commit=True):
         if track.id() not in track_entry.ids:
             track_entry.ids.append(track.id())
 
-        print ('Duplicate entries found for %s: %s' % 
+        print ('Duplicate entries found for %s: %s' %
                (track_entry.path, ','.join([str(x) for x in track_entry.ids])))
 
     track_entry.validate()
@@ -175,7 +175,7 @@ def sync_dir(db, path, silent=False):
     for (i, t) in enumerate(itunes_manager.itunes.tracks()):
         """If it's missing, add the track name and id to a list"""
         if not silent:
-            sys.stdout.write('[%d/%d (%.02f%%)]\r' % (i, count, (100 * float(i)/count)))
+            sys.stdout.write('[%d/%d (%.02f%%)]\r' % (i, count, (100 * float(i) / count)))
 
         if t.location() == k.missing_value:
             if not silent:
@@ -223,7 +223,7 @@ def sync_dir(db, path, silent=False):
                 # Add to iTunes
                 f_alias = Alias(f)
 
-                itunes_track = lib.add([f_alias,], timeout=AS_TIMEOUT)
+                itunes_track = lib.add([f_alias, ], timeout=AS_TIMEOUT)
 
                 if not itunes_track:
                     failures.append(f)
@@ -233,7 +233,7 @@ def sync_dir(db, path, silent=False):
                     successes.append(f)
 
             if not silent:
-                sys.stdout.write('[Total found: %d New: %d]\r' % 
+                sys.stdout.write('[Total found: %d New: %d]\r' %
                                  (total_found, new_found))
 
     if not silent:
@@ -242,8 +242,8 @@ def sync_dir(db, path, silent=False):
     return (successes, failures)
 
 if __name__ == '__main__':
-    # Unbuffer stdout
-    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) # TEMP DEBUG
+    # Unbuffer stdout, for debugging
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
     # Setup DB
     db = init_db_conn()

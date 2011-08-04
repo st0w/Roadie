@@ -17,8 +17,6 @@ import tempfile
 
 # ---*< Third-party imports >*-------------------------------------------------
 from appscript import app, k, CommandError #@UnresolvedImport
-from dictshield.document import Document
-from dictshield.fields import DateTimeField, IntField, ListField, StringField
 
 # ---*< Local imports >*-------------------------------------------------------
 
@@ -107,16 +105,6 @@ def smart_str(oldstr, encoding='utf-8', strings_only=False, errors='strict'):
         return unicode(oldstr).encode(encoding, errors)
 
 
-class iTunesTrack(Document):
-    """iTunes Track model
-    """
-    md5 = StringField()
-    path = StringField()
-    rating = IntField(min_value=0, max_value=100, default=0)
-    ids = ListField(IntField())
-    date_added = DateTimeField()
-
-
 class ITunesManager(object):
     """Handles connecting to and sending operations to iTunes
     """
@@ -140,40 +128,28 @@ class ITunesManager(object):
         """Establishes a connection to iTunes.  You won't need to use this."""
         if not self.itunes:
             self.itunes = app('iTunes')
-#        else:
-#            print "already connected to iTunes"
 
-    def get_all_tracks(self, only_audio=True):
+    def get_all_tracks(self):
         """Returns a list containing all the tracks in iTunes
         
-        :param only_audio: `bool` indicating if only audio tracks should be
-                            returned, or if all items should be returned.
+        :rtype: An iterable that provides access to the library tracks 
         """
         self._connect_to_itunes()
 
-        if not only_audio:
-            return self.itunes.tracks()
+        return self.itunes.tracks()
 
-        all_tracks = []
-
-        for t in self.itunes.tracks():
-            if t.kind() in self.audio_types:
-                all_tracks.append(t)
-#            else:
-#                print 'UNKNOWN KIND: %s' % t.kind()
-
-        return all_tracks
-
-    def remove_dead_tracks(self, only_audio=True):
+    def remove_dead_tracks(self):
         """Removes all dead items (entries without a corresponding file)
-        from the iTunes music library
+        from the iTunes library.
+        
+        DO NOT prompt for verification before removing tracks!  Does not
+        attempt to remove from the file system, just removes the entry
+        from the iTunes Library.
         """
         self._connect_to_itunes()
-        tracks = self.get_all_tracks(only_audio)
-
         count = 0
 
-        for t in tracks:
+        for t in self.get_all_tracks():
             if t.location() == k.missing_value:
                 sys.stderr.write('Deleting %s - %s\n' % (smart_str(t.artist()),
                                                          smart_str(t.name())))
@@ -203,14 +179,10 @@ class ITunesManager(object):
                              playlist)
             return []
 
-        sys.stdout.write('Obtaining copy of iTunes library...')
-        library_tracks = self.get_all_tracks()
-        sys.stdout.write('done\n')
-
         tracks_to_kill = []
 
         sys.stdout.write('Building list of tracks from playlist...')
-        for t in library_tracks:
+        for t in self.get_all_tracks():
             if t.persistent_ID() in track_ids:
                 tracks_to_kill.append(t)
         sys.stdout.write('done\n')
@@ -219,7 +191,9 @@ class ITunesManager(object):
 
 
 def delete_tracks(tracks):
-    """Deletes a list of tracks from iTunes.
+    """
+    Deletes a list of tracks from iTunes, AS WELL AS the
+    corresponding file.
     
     --> BE CAREFUL WITH THIS!!!! <--
 
