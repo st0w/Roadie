@@ -1,0 +1,76 @@
+I have my music on a separate server at home, and I've always been very
+particular about how I organize the content.  Consequently, I don't let
+iTunes manage my music library.  While this allows me the control that I
+desire, it also leads to problems from time to time that aren't easy to
+rectify:
+
+* Moving a large number of files at once without losing ratings and
+  other iTunes metadata is pretty much impossible.
+  
+* Keeping a directory hierarchy synchronized with iTunes is not easy -
+  if you select a base directory and try to add the whole thing, iTunes
+  will pick up on minor, insignificant differences and seemingly
+  randomly add certain duplicate tracks that refer to the same physical
+  file.
+  
+* Numerous others that I can't think of right now.
+
+And while iTunes is easily controllable via AppleScript, I wanted the
+ability to have the power of Python with abstraction done so that I
+can take advantage of the various controls provided via AppleScript
+without actually having to code in it.
+
+The end result is Roadie, which intends to provide the ability to
+manage your iTunes library from Python without requiring you to
+actually learn the unfortunateness that is AppleScript.
+
+Currently, the code is an alpha v0.01.  It works, but it's still fairly
+bare-bones.  The two scripts that are the most up-to-date and provide
+the best example of its use are
+`sync_directory_hierarchy_with_itunes.py` and
+`apply_ratings_on_dupes.py`.  Both of these scripts have been tested
+and work as expected on Lion (10.7.0) with iTunes 10.4.  They should
+work on many versions older, and anything newer, as they only utilize
+the most basic of AppleScript functions at this point.
+
+Have a look at those to see what can be done, and feel free to suggest
+any changes and patches!
+
+Roadmap of future things to add:
+* Ability to synchronize artwork between both files and library. iTunes
+  stores artwork differently depending on the source - if you paste it
+  in manually, it stores it in the ID3 tags of the file. But if iTunes
+  obtains it, the artwork is stored only in the library and will not
+  travel with the file.
+  
+* Add ability to obtain missing artwork from various sources, most
+  notably Discogs (because nobody else seems to provide Discogs as a
+  source, and they have a GREAT database of artwork)
+  
+* Provide a 'mass relocate' function, allowing files to be moved en
+  masse while retaining ratings and iTunes metadata without requiring
+  a forced rebuild of the iTunes library from a modified version of the
+  XML library (which loses the original value for 'Date Added' in the
+  process)
+
+Working data are stored by default in a temporary SQLite database that
+is written and kept solely in memory.  Data are modeled in Python using
+DictShield, serialized to JSON, and stored in SQLite as JSON objects.
+
+This all works extremely fast, with the exception of iTunes itself.  The
+slowest part of the process is waiting for iTunes to do its thing and
+respond that it's done.
+
+Dependencies:
+* DictShield - a wonderful library written by James Dennis that provides
+  database-agnostic data modeling with validation and data reshaping.
+  
+  https://github.com/j2labs/dictshield
+  
+* py-appscript - Python to AppleScript event bridge.  Necessary for
+  interacting with iTunes via AppleScript.
+
+  http://appscript.sourceforge.net/py-appscript/index.html
+
+* SQLite3 - included with Python since 2.3, I think.  You won't need to
+  install anything for this dep, you already have it.

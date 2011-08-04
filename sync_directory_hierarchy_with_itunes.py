@@ -40,6 +40,13 @@ As a bonus, it also reports duplicate tracks in your Library that
 currently have the same path!  I haven't thought about trying to handle
 these dupes automatically yet, but that might come in the future.
 
+This can walk a tree of roughly 4,000 files and add 100 new files in 3-4
+minutes on a 2.53GHz Core 2 Duo MacBook Pro.  The slowest part, by far,
+is waiting for iTunes to add the tracks.  I've worked with doing this
+either one track at a time or in batch in the past, and the difference
+is negligible.  And the problem with doing them in batch is the timeout
+must be much higher, as iTunes still processes one file at a time.
+
 """
 # ---*< Standard imports >*----------------------------------------------------
 import json
