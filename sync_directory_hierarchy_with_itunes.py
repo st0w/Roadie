@@ -59,7 +59,8 @@ from appscript import k
 from mactypes import Alias
 
 # ---*< Local imports >*-------------------------------------------------------
-from itunes import init_db_conn, ITunesManager, iTunesTrack
+from itunes import init_db_conn, ITunesManager
+from models import iTunesTrack
 
 # ---*< Initialization >*------------------------------------------------------
 # Dir to start in.  Preferably a unicode string, because it is used as
